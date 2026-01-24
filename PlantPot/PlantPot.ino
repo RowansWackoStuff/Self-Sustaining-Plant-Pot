@@ -14,10 +14,6 @@
 #endif
 #include <ESPAsyncWebServer.h>
 
-// REPLACE WITH YOUR NETWORK CREDENTIALS
-const char* ssid = ""; 
-const char* password = ""; 
-
 const int output = 2;
 unsigned long waterAmount = 0;
 
@@ -127,15 +123,13 @@ AsyncWebServer server(80);
 
 void setup() {
   Serial.begin(115200);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.println("WiFi Failed!");
-    return;
-  }
-  Serial.println();
-  Serial.print("ESP IP Address: http://");
-  Serial.println(WiFi.localIP());
+
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP("MyESP32_AP", "12345678");
+
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("Connect to Wi-Fi at: http://");
+  Serial.println(IP);
   
   pinMode(output, OUTPUT);
   digitalWrite(output, LOW);
