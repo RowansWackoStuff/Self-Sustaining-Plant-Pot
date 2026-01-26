@@ -14,7 +14,6 @@
 #endif
 #include <ESPAsyncWebServer.h>
 
-const int output = 2;
 unsigned long waterAmount = 0;
 
 bool timer24hActive = false;
@@ -26,7 +25,7 @@ const unsigned long TIMER_24H = 10000;
 bool pumpRunning = false;
 unsigned long pumpStopTime = 0;
 
-const int pumpPin = 2; 
+const int pumpPin = 5; 
 
 // HTML web page
 const char index_html[] PROGMEM = R"rawliteral(
@@ -35,80 +34,125 @@ const char index_html[] PROGMEM = R"rawliteral(
   <title>ESP Water Control</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: Arial; text-align: center; margin:0px auto; padding-top: 30px;}
+    body { font-family: Arial; text-align: center; margin:0 auto; padding-top: 30px;}
     input {
       padding: 10px;
-      font-size: 20px;
-      width: 200px;
-      margin-bottom: 20px;
+      font-size: 18px;
+      width: 220px;
+      margin-bottom: 15px;
     }
     .button {
       padding: 10px 20px;
-      font-size: 24px;
+      font-size: 20px;
       color: #fff;
       background-color: #2f4468;
       border: none;
       border-radius: 5px;
       cursor: pointer;
+      margin: 5px;
     }
     .button:hover { background-color: #1f2e45; }
+    .hidden { display: none; }
   </style>
 </head>
 
 <body>
   <h1>Water Dispenser</h1>
 
-  <input type="number" id="amount" placeholder="mL of water" min="1">
-  <br><br>
-  <button class="button" onclick="sendAmount()">Confirm</button>
-  <button class="button" onclick="cancel()">Cancel</button>
+  <button class="button" onclick="togglePage()">Toggle Mode</button>
+
+  <!-- PAGE 1 -->
+  <div id="pageSingle">
+    <h2>Single Amount</h2>
+    <input type="number" id="amount" placeholder="mL of water" min="1">
+    <br>
+    <button class="button" onclick="sendAmount()">Confirm</button>
+    <button class="button" onclick="cancel()">Cancel</button>
+  </div>
+
+  <!-- PAGE 2 -->
+  <div id="pageMulti" class="hidden">
+    <h2>Multi-Day Schedule</h2>
+
+    <input type="number" id="amount1" placeholder="Amount 1 (mL)" min="1"><br>
+    <input type="number" id="amount2" placeholder="Amount 2 (mL)" min="1"><br>
+    <input type="number" id="days" placeholder="Number of days" min="1"><br>
+
+    <button class="button" onclick="sendMulti()">Confirm</button>
+    <button class="button" onclick="cancel()">Cancel</button>
+  </div>
 
   <h2 id="timer">No timer running</h2>
 
-  <script>
-  function sendAmount() {
-    var amount = document.getElementById("amount").value;
-    if (amount === "") {
-      alert("Please enter an amount");
-      return;
+<script>
+let showingSingle = true;
+
+function togglePage() {
+  showingSingle = !showingSingle;
+  document.getElementById("pageSingle").classList.toggle("hidden");
+  document.getElementById("pageMulti").classList.toggle("hidden");
+}
+
+function sendAmount() {
+  var amount = document.getElementById("amount").value;
+  if (amount === "") {
+    alert("Please enter an amount");
+    return;
+  }
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/water?amount=" + amount, true);
+  xhr.send();
+}
+
+function sendMulti() {
+  var a1 = document.getElementById("amount1").value;
+  var a2 = document.getElementById("amount2").value;
+  var d  = document.getElementById("days").value;
+
+  if (a1 === "" || a2 === "" || d === "") {
+    alert("Fill all fields");
+    return;
+  }
+
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET",
+    "/water_multi?amount1=" + a1 + "&amount2=" + a2 + "&days=" + d,
+    true
+  );
+  xhr.send();
+}
+
+function cancel() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/cancel", true);
+  xhr.send();
+}
+
+// Poll timer
+setInterval(function() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/time", true);
+  xhr.onload = function() {
+    var seconds = parseInt(this.responseText);
+    if (seconds <= 0) {
+      document.getElementById("timer").innerHTML = "No timer running";
+    } else {
+      document.getElementById("timer").innerHTML = formatTime(seconds);
     }
+  };
+  xhr.send();
+}, 1000);
 
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", "/water?amount=" + amount, true);
-    xhr.send();
-  }
-
-  function cancel() {
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", "/cancel", true);
-    xhr.send();
-  }
-
-  // Poll ESP every second
-  setInterval(function() {
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", "/time", true);
-    xhr.onload = function() {
-      var seconds = parseInt(this.responseText);
-      if (seconds <= 0) {
-        document.getElementById("timer").innerHTML = "No timer running";
-      } else {
-        document.getElementById("timer").innerHTML = formatTime(seconds);
-      }
-    };
-    xhr.send();
-  }, 1000);
-
-  function formatTime(sec) {
-    var h = Math.floor(sec / 3600);
-    var m = Math.floor((sec % 3600) / 60);
-    var s = sec % 60;
-    return "Time remaining: " +
-          String(h).padStart(2, '0') + ":" +
-          String(m).padStart(2, '0') + ":" +
-          String(s).padStart(2, '0');
-  }
-  </script>
+function formatTime(sec) {
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  var s = sec % 60;
+  return "Time remaining: " +
+         String(h).padStart(2,'0') + ":" +
+         String(m).padStart(2,'0') + ":" +
+         String(s).padStart(2,'0');
+}
+</script>
 </body>
 </html>
 )rawliteral";
@@ -131,8 +175,8 @@ void setup() {
   Serial.print("Connect to Wi-Fi at: http://");
   Serial.println(IP);
   
-  pinMode(output, OUTPUT);
-  digitalWrite(output, LOW);
+  pinMode(pumpPin, OUTPUT);
+  digitalWrite(pumpPin, LOW);
   
   // Send web page to client
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -144,7 +188,7 @@ void setup() {
 
       // water
       int amount = request->getParam("amount")->value().toInt();
-      runWaterFunction(amount);
+      // waterAmount = amount;
 
       // timer
       if (timer24hActive) {
@@ -157,6 +201,7 @@ void setup() {
       timer24hActive = true;
       
       request->send(200, "text/plain", "Water amount received + timer started");
+      runWaterFunction(amount);
 
     } else {
       request->send(400, "text/plain", "Missing amount");
@@ -203,9 +248,10 @@ void runWaterFunction(int amountML) {
   // calculate amount of time to run the pump 
   unsigned long runTime = amountML/22  * 1000;
 
-  digitalWrite(2, HIGH);
+  Serial.println("2");
   pumpStopTime = millis() + runTime;
   pumpRunning = true;
+  digitalWrite(pumpPin, HIGH);
 
   // 80,000 * (t * 60 * 60) = 500 mililitrers a hour
   // 22ml a second
@@ -223,7 +269,8 @@ void loop() {
   if (timer24hActive && millis() - timer24hStart >= TIMER_24H) {
     
     unsigned long runTime = waterAmount/22  * 1000;
-    digitalWrite(2, HIGH);
+    digitalWrite(pumpPin, HIGH);
+    Serial.println("1");
     
     // repeat timer
     pumpStopTime = millis() + runTime;
