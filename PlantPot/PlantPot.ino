@@ -17,7 +17,8 @@ const unsigned long TIMER_24H = 24UL * 60UL * 60UL * 1000UL;
 // const unsigned long TIMER_24H = 10000;
 
 const int uS_TO_S_FACTOR = 1000000ULL;
-const int TIME_TO_SLEEP = 10;
+RTC_DATA_ATTR uint64_t TIME_TO_SLEEP = 60;
+RTC_DATA_ATTR bool CONFIGURED = false;
 
 bool timer24hActive = false;
 unsigned long timer24hStart = 0;
@@ -153,7 +154,7 @@ function formatTime(sec) {
 </html>
 )rawliteral";
 
-
+// used on the first start
 void goToDeepSleep() {
   Serial.println("Going to deep sleep...");
   delay(50);
@@ -165,6 +166,24 @@ void goToDeepSleep() {
   delay(100);
   esp_deep_sleep_start();
 }
+
+// used for all other purposes
+void prepareSleep(uint64_t sleepUs) {
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+
+  // Timer wakeup
+  esp_sleep_enable_timer_wakeup(sleepUs);
+
+  // GPIO wakeup (deep sleep compatible)
+  uint64_t mask = 1ULL << BUTTON_PIN;
+  esp_deep_sleep_enable_gpio_wakeup(mask, ESP_GPIO_WAKEUP_GPIO_LOW);
+
+  Serial.println("Entering deep sleep...");
+  delay(100);
+  esp_deep_sleep_start();
+}
+
+
 
 void runWaterFunction(int amountML) {
   Serial.print("Water requested: ");
@@ -190,7 +209,7 @@ void runWaterFunction(int amountML) {
   }
 
   // SET SLEEP TIMER
-  esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
+  prepareSleep(TIME_TO_SLEEP * 1000000UL);
 
   // 80,000 * (t * 60 * 60) = 500 mililitrers a hour
   // 22ml a second
@@ -233,6 +252,7 @@ void enableWebserver(){
       timer24hActive = true;
       
       request->send(200, "text/plain", "Water amount received + timer started");
+      CONFIGURED = true;
       runWaterFunction(amount);
 
     } else {
@@ -270,9 +290,14 @@ void enableWebserver(){
   server.begin();
 }
 
+int64_t remaining = TIME_TO_SLEEP * uS_TO_S_FACTOR;
+uint64_t now = 0;
+
 void setup() {
   Serial.begin(115200);
   delay(1000); // <-- Wait for Serial Monitor to connect
+
+  uint64_t now = esp_timer_get_time();
 
   // enable pins
   pinMode(BUTTON_PIN, INPUT_PULLUP); // Button to GND
@@ -283,13 +308,22 @@ void setup() {
 
   esp_sleep_wakeup_cause_t reason = esp_sleep_get_wakeup_cause();
   if (reason == ESP_SLEEP_WAKEUP_GPIO) {
+    if (CONFIGURED == true){
+      remaining = (TIME_TO_SLEEP - now) / 1000000;
+      Serial.printf("Manual wake! Remaining time was: %lld seconds\n", remaining);
+    }
+    
     Serial.println("Woke up from button press!");
     enableWebserver();
     Serial.println("Webserver running");
   } 
-  // else if (reason == ) {
-
-  // }
+  else if (reason == ESP_SLEEP_WAKEUP_TIMER) {
+    // water plants
+    runWaterFunction(waterAmount);
+    // // go back to sleep
+    // esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * 1000000UL);
+    // esp_deep_sleep_start();
+  }
   else {
     Serial.println("Power-on or reset. Waiting 3 sec before sleep...");
     delay(3000); // <-- Give time to open Serial Monitor
@@ -303,7 +337,17 @@ void loop() {
   if (digitalRead(BUTTON_PIN) == LOW) {
     delay(200); // debounce
     while (digitalRead(BUTTON_PIN) == LOW) delay(10); // wait for release
-    goToDeepSleep();
+
+    if(CONFIGURED == true){
+      uint64_t sleepUs = TIME_TO_SLEEP * 1000000ULL;
+      // uint64_t now targetTime = now + sleepUs; 
+      prepareSleep(remaining * 1000000UL - now);
+    }
+    else{
+      goToDeepSleep();
+    }
+
+    
   }
 
   delay(500);
