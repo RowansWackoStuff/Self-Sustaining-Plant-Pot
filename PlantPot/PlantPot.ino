@@ -79,8 +79,6 @@ const char index_html[] PROGMEM = R"rawliteral(
     <button class="button" onclick="cancel()">Cancel</button>
   </div>
 
-  <h2 id="timer">No timer running</h2>
-
 <script>
 let showingSingle = true;
 
@@ -123,31 +121,6 @@ function cancel() {
   var xhr = new XMLHttpRequest();
   xhr.open("GET", "/cancel", true);
   xhr.send();
-}
-
-// Poll timer
-setInterval(function() {
-  var xhr = new XMLHttpRequest();
-  xhr.open("GET", "/time", true);
-  xhr.onload = function() {
-    var seconds = parseInt(this.responseText);
-    if (seconds <= 0) {
-      document.getElementById("timer").innerHTML = "No timer running";
-    } else {
-      document.getElementById("timer").innerHTML = formatTime(seconds);
-    }
-  };
-  xhr.send();
-}, 1000);
-
-function formatTime(sec) {
-  var h = Math.floor(sec / 3600);
-  var m = Math.floor((sec % 3600) / 60);
-  var s = sec % 60;
-  return "Time remaining: " +
-         String(h).padStart(2,'0') + ":" +
-         String(m).padStart(2,'0') + ":" +
-         String(s).padStart(2,'0');
 }
 </script>
 </body>
@@ -208,9 +181,6 @@ void runWaterFunction(int amountML) {
     }
   }
 
-  // SET SLEEP TIMER
-  prepareSleep(TIME_TO_SLEEP * 1000000UL);
-
   // 80,000 * (t * 60 * 60) = 500 mililitrers a hour
   // 22ml a second
 }
@@ -248,7 +218,6 @@ void enableWebserver(){
       }
       
       // begin water timer
-      timer24hStart = millis();
       timer24hActive = true;
       
       request->send(200, "text/plain", "Water amount received + timer started");
@@ -260,26 +229,11 @@ void enableWebserver(){
     }
   });
 
-  server.on("/time", HTTP_GET, [](AsyncWebServerRequest *request) {
-    if (timer24hActive == false) {
-      request->send(200, "text/plain", "0");
-      return;
-    }
-
-    // calculate time since timer was started
-    unsigned long elapsed = millis() - timer24hStart;
-    unsigned long remaining = (elapsed >= TIMER_24H) ? 0 : (TIMER_24H - elapsed);
-
-    request->send(200, "text/plain", String(remaining / 1000));
-  });
-
   server.on("/cancel", HTTP_GET, [](AsyncWebServerRequest *request) {
 
     // cancel timer and pump
     timer24hActive = false;
-    timer24hStart = 0;
     pumpStopTime = 0;
-
     pumpRunning = false;
     digitalWrite(pumpPin, LOW);
 
@@ -290,14 +244,9 @@ void enableWebserver(){
   server.begin();
 }
 
-int64_t remaining = TIME_TO_SLEEP * uS_TO_S_FACTOR;
-uint64_t now = 0;
-
 void setup() {
   Serial.begin(115200);
   delay(1000); // <-- Wait for Serial Monitor to connect
-
-  uint64_t now = esp_timer_get_time();
 
   // enable pins
   pinMode(BUTTON_PIN, INPUT_PULLUP); // Button to GND
@@ -308,11 +257,6 @@ void setup() {
 
   esp_sleep_wakeup_cause_t reason = esp_sleep_get_wakeup_cause();
   if (reason == ESP_SLEEP_WAKEUP_GPIO) {
-    if (CONFIGURED == true){
-      remaining = (TIME_TO_SLEEP - now) / 1000000;
-      Serial.printf("Manual wake! Remaining time was: %lld seconds\n", remaining);
-    }
-    
     Serial.println("Woke up from button press!");
     enableWebserver();
     Serial.println("Webserver running");
@@ -321,8 +265,7 @@ void setup() {
     // water plants
     runWaterFunction(waterAmount);
     // // go back to sleep
-    // esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * 1000000UL);
-    // esp_deep_sleep_start();
+    prepareSleep(TIME_TO_SLEEP * 1000000UL);
   }
   else {
     Serial.println("Power-on or reset. Waiting 3 sec before sleep...");
@@ -338,10 +281,8 @@ void loop() {
     delay(200); // debounce
     while (digitalRead(BUTTON_PIN) == LOW) delay(10); // wait for release
 
-    if(CONFIGURED == true){
-      uint64_t sleepUs = TIME_TO_SLEEP * 1000000ULL;
-      // uint64_t now targetTime = now + sleepUs; 
-      prepareSleep(remaining * 1000000UL - now);
+    if(timer24hActive == true){
+      prepareSleep(TIME_TO_SLEEP * 1000000UL);
     }
     else{
       goToDeepSleep();
