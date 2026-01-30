@@ -13,17 +13,21 @@ const int pumpPin = 5;
 bool pumpRunning = false;
 unsigned long pumpStopTime = 0;
 
-const unsigned long TIMER_24H = 24UL * 60UL * 60UL * 1000UL;
-// const unsigned long TIMER_24H = 10000;
+// const unsigned long TIMER_24H = 24UL * 60UL * 60UL * 1000UL;
+const unsigned long TIMER_24H = 15ULL * 1000000ULL;
 
 const int uS_TO_S_FACTOR = 1000000ULL;
-RTC_DATA_ATTR uint64_t TIME_TO_SLEEP = 60;
-RTC_DATA_ATTR bool CONFIGURED = false;
+
+RTC_DATA_ATTR double waterAmount = 0;
+
+RTC_DATA_ATTR double maxWaterAmount = 0;
+RTC_DATA_ATTR double days = 0;
+RTC_DATA_ATTR double currentDay = 0;
+RTC_DATA_ATTR bool seedSettingActive = false;
 
 bool timer24hActive = false;
-unsigned long timer24hStart = 0;
 
-RTC_DATA_ATTR int waterAmount = 0;
+
 
 // HTML web page
 const char index_html[] PROGMEM = R"rawliteral(
@@ -210,19 +214,47 @@ void enableWebserver(){
       // water
       int amount = request->getParam("amount")->value().toInt();
       // waterAmount = amount;
-
-      // timer
-      if (timer24hActive) {
-        request->send(403, "text/plain", "Timer already running");
-        return;
-      }
       
       // begin water timer
       timer24hActive = true;
+
+      // ensure seed setting is no longer active
+      seedSettingActive = false;
       
-      request->send(200, "text/plain", "Water amount received + timer started");
-      CONFIGURED = true;
+      request->send(200, "text/plain", "Water amount received");
+
       runWaterFunction(amount);
+
+    } else {
+      request->send(400, "text/plain", "Missing amount");
+    }
+  });
+
+  server.on("/water_multi", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("amount1") && request->hasParam("amount2") && request->hasParam("days")) {
+
+      // store varaibles
+      waterAmount = request->getParam("amount1")->value().toInt();
+      maxWaterAmount = request->getParam("amount2")->value().toInt();
+      days = request->getParam("days")->value().toInt();
+      currentDay = 0;
+
+      // exponential calculation
+      // R = (B/A)^(1/T) - 1
+
+      // B = future value (max water)
+      // A = original value (min water)
+      // R = growth rate ()
+      // T = time period (days)
+      
+      // begin water timer
+      timer24hActive = true;
+
+      // ensure seed setting is active
+      seedSettingActive = true;
+      
+      request->send(200, "text/plain", "Water amount received");
+      runWaterFunction(waterAmount);
 
     } else {
       request->send(400, "text/plain", "Missing amount");
@@ -263,9 +295,45 @@ void setup() {
   } 
   else if (reason == ESP_SLEEP_WAKEUP_TIMER) {
     // water plants
-    runWaterFunction(waterAmount);
+    if(seedSettingActive == false){
+      runWaterFunction(waterAmount);
+    }
+    else{
+      // exponential calculation
+      // R = (B/A)^(1/T) - 1
+
+      // B = future value (max water)
+      // A = original value (min water)
+      // R = growth rate ()
+      // T = time period (days)
+
+      
+
+      if(currentDay < days){
+        currentDay++;
+
+        Serial.print("day: ");
+        Serial.print(currentDay);
+        Serial.println("");
+
+        double growthRate = pow((maxWaterAmount/waterAmount),(currentDay/days)) - 1;
+
+        Serial.print("growth rate: ");
+        Serial.print(growthRate);
+        Serial.println("");
+
+        waterAmount = waterAmount + (waterAmount * growthRate);
+
+        Serial.print("water amount: ");
+        Serial.print(waterAmount);
+        Serial.println("");
+      }
+
+      runWaterFunction(waterAmount);
+    }
+    
     // // go back to sleep
-    prepareSleep(TIME_TO_SLEEP * 1000000UL);
+    prepareSleep(TIMER_24H);
   }
   else {
     Serial.println("Power-on or reset. Waiting 3 sec before sleep...");
@@ -282,7 +350,7 @@ void loop() {
     while (digitalRead(BUTTON_PIN) == LOW) delay(10); // wait for release
 
     if(timer24hActive == true){
-      prepareSleep(TIME_TO_SLEEP * 1000000UL);
+      prepareSleep(TIMER_24H);
     }
     else{
       goToDeepSleep();
