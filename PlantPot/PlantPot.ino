@@ -13,21 +13,15 @@ const int pumpPin = 5;
 bool pumpRunning = false;
 unsigned long pumpStopTime = 0;
 
-// const unsigned long TIMER_24H = 24UL * 60UL * 60UL * 1000UL;
+// const unsigned long TIMER_24H = 24UL * 60ULL * 60ULL * 1000000ULL;
 const unsigned long TIMER_24H = 15ULL * 1000000ULL;
 
-const int uS_TO_S_FACTOR = 1000000ULL;
-
 RTC_DATA_ATTR double waterAmount = 0;
-
 RTC_DATA_ATTR double maxWaterAmount = 0;
 RTC_DATA_ATTR double days = 0;
 RTC_DATA_ATTR double currentDay = 0;
 RTC_DATA_ATTR bool seedSettingActive = false;
-
-bool timer24hActive = false;
-
-
+RTC_DATA_ATTR bool timer24hActive = false;
 
 // HTML web page
 const char index_html[] PROGMEM = R"rawliteral(
@@ -131,30 +125,20 @@ function cancel() {
 </html>
 )rawliteral";
 
-// used on the first start
 void goToDeepSleep() {
-  Serial.println("Going to deep sleep...");
-  delay(50);
-
-  uint64_t mask = 1ULL << BUTTON_PIN;
-  esp_deep_sleep_enable_gpio_wakeup(mask, ESP_GPIO_WAKEUP_GPIO_LOW);
-
-  Serial.println("Entering deep sleep now...");
-  delay(100);
-  esp_deep_sleep_start();
-}
-
-// used for all other purposes
-void prepareSleep(uint64_t sleepUs) {
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
 
   // Timer wakeup
-  esp_sleep_enable_timer_wakeup(sleepUs);
+  if(timer24hActive == true){
+    esp_sleep_enable_timer_wakeup(TIMER_24H);
+  }
 
-  // GPIO wakeup (deep sleep compatible)
+  // specify which pin wakes the esp
   uint64_t mask = 1ULL << BUTTON_PIN;
-  esp_deep_sleep_enable_gpio_wakeup(mask, ESP_GPIO_WAKEUP_GPIO_LOW);
+  // esp_deep_sleep_enable_gpio_wakeup(mask, ESP_GPIO_WAKEUP_GPIO_LOW);
+  esp_deep_sleep_enable_gpio_wakeup(mask, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
+  // enter deep sleep
   Serial.println("Entering deep sleep...");
   delay(100);
   esp_deep_sleep_start();
@@ -170,20 +154,21 @@ void runWaterFunction(int amountML) {
   // set water amount so that the pump can be repeated by the timer
   waterAmount = amountML;
   // calculate amount of time to run the pump 
-  unsigned long runTime = amountML/22  * 1000;
+  unsigned long runTime = amountML/22.0  * 1000;
 
-  Serial.println("2");
+  // set pump duration
   pumpStopTime = millis() + runTime;
   pumpRunning = true;
   digitalWrite(pumpPin, HIGH);
 
-  while (pumpRunning){
-    if (pumpRunning && millis() >= pumpStopTime){
-      digitalWrite(pumpPin, LOW);
-      pumpRunning = false;
-      Serial.println("Pump stopped");
-    }
-  }
+  // pump until timer ends
+  // while (pumpRunning){
+  //   if (pumpRunning && millis() >= pumpStopTime){
+  //     digitalWrite(pumpPin, LOW);
+  //     pumpRunning = false;
+  //     Serial.println("Pump stopped");
+  //   }
+  // }
 
   // 80,000 * (t * 60 * 60) = 500 mililitrers a hour
   // 22ml a second
@@ -254,6 +239,7 @@ void enableWebserver(){
       seedSettingActive = true;
       
       request->send(200, "text/plain", "Water amount received");
+      
       runWaterFunction(waterAmount);
 
     } else {
@@ -278,14 +264,13 @@ void enableWebserver(){
 
 void setup() {
   Serial.begin(115200);
-  delay(1000); // <-- Wait for Serial Monitor to connect
+  delay(1000); // wait for Serial Monitor to connect on startup
 
   // enable pins
   pinMode(BUTTON_PIN, INPUT_PULLUP); // Button to GND
+  // pinMode(BUTTON_PIN, INPUT); // Button to GND
   pinMode(pumpPin, OUTPUT);
   digitalWrite(pumpPin, LOW);
-
-  
 
   esp_sleep_wakeup_cause_t reason = esp_sleep_get_wakeup_cause();
   if (reason == ESP_SLEEP_WAKEUP_GPIO) {
@@ -299,16 +284,6 @@ void setup() {
       runWaterFunction(waterAmount);
     }
     else{
-      // exponential calculation
-      // R = (B/A)^(1/T) - 1
-
-      // B = future value (max water)
-      // A = original value (min water)
-      // R = growth rate ()
-      // T = time period (days)
-
-      
-
       if(currentDay < days){
         currentDay++;
 
@@ -316,6 +291,12 @@ void setup() {
         Serial.print(currentDay);
         Serial.println("");
 
+        // exponential calculation
+        // R = (B/A)^(1/T) - 1
+        // B = future value (max water)
+        // A = original value (min water)
+        // R = growth rate ()
+        // T = time period (days)
         double growthRate = pow((maxWaterAmount/waterAmount),(currentDay/days)) - 1;
 
         Serial.print("growth rate: ");
@@ -332,32 +313,34 @@ void setup() {
       runWaterFunction(waterAmount);
     }
     
-    // // go back to sleep
-    prepareSleep(TIMER_24H);
+    // go back to sleep
+    // goToDeepSleep();
   }
   else {
     Serial.println("Power-on or reset. Waiting 3 sec before sleep...");
     delay(3000); // <-- Give time to open Serial Monitor
     goToDeepSleep();
   }
+
+  Serial.println("Device awake. Press button to sleep again.");
 }
 
 void loop() {
-  Serial.println("Device awake. Press button to sleep again.");
-  
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    delay(200); // debounce
-    while (digitalRead(BUTTON_PIN) == LOW) delay(10); // wait for release
+  // Serial.println("Device awake. Press button to sleep again.");
 
-    if(timer24hActive == true){
-      prepareSleep(TIMER_24H);
-    }
-    else{
+  if (pumpRunning && millis() >= pumpStopTime){
+    digitalWrite(pumpPin, LOW);
+    pumpRunning = false;
+    Serial.println("Pump stopped");
+
+    if(digitalRead(BUTTON_PIN) == LOW){
       goToDeepSleep();
     }
-
-    
+  }
+  
+  if (digitalRead(BUTTON_PIN) == LOW && pumpRunning == false) {
+    goToDeepSleep();
   }
 
-  delay(500);
+  // delay(500);
 }
