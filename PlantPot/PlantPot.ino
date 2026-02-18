@@ -13,8 +13,8 @@ const int pumpPin = 5;
 bool pumpRunning = false;
 unsigned long pumpStopTime = 0;
 
-// const unsigned long TIMER_24H = 24UL * 60ULL * 60ULL * 1000000ULL;
-const unsigned long TIMER_24H = 15ULL * 1000000ULL;
+const unsigned long TIMER_24H = 24UL * 60ULL * 60ULL * 1000000ULL;
+// const unsigned long TIMER_24H = 15ULL * 1000000ULL;
 
 RTC_DATA_ATTR double waterAmount = 0;
 RTC_DATA_ATTR double maxWaterAmount = 0;
@@ -30,7 +30,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   <title>ESP Water Control</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: Arial; text-align: center; margin:0 auto; padding-top: 30px;}
+    body { font-family: Arial; text-align: center; margin:0 auto; padding-top: 20px;}
     input {
       padding: 10px;
       font-size: 18px;
@@ -54,37 +54,53 @@ const char index_html[] PROGMEM = R"rawliteral(
 <body>
   <h1>Water Dispenser</h1>
 
+  <p>
+    Timer status:
+    <strong id="timerStatus" style="color:red;">STOPPED</strong>
+  </p>
+
   <button class="button" onclick="togglePage()">Toggle Mode</button>
 
   <!-- PAGE 1 -->
-  <div id="pageSingle">
-    <h2>Single Amount</h2>
-    <input type="number" id="amount" placeholder="mL of water" min="1">
-    <br>
-    <button class="button" onclick="sendAmount()">Confirm</button>
-    <button class="button" onclick="cancel()">Cancel</button>
+<div id="pageSingle">
+  <h2>Single Amount</h2>
+  <p>Water amount</p>
+  <input type="number" id="amount" min="1" value="%MIN_WATER%">
+  <br>
+  <button class="button" onclick="sendAmount()">Confirm</button>
+  <button class="button" onclick="cancel()">Cancel</button>
+</div>
+
+<!-- PAGE 2 -->
+<div id="pageMulti" class="hidden">
+  <h2>Multi-Day Schedule</h2>
+
+  <p>Minimum water amount</p>
+  <input type="number" id="amount1" min="1" value="%MIN_WATER%"><br>
+  <p>Maximum water amount</p>
+  <input type="number" id="amount2" min="1" value="%MAX_WATER%"><br>
+  <p>Amount of days</p>
+  <input type="number" id="days" min="1" value="%DAYS%"><br>
+
+  <button class="button" onclick="sendMulti()">Confirm</button>
+  <button class="button" onclick="cancel()">Cancel</button>
+
+  <div id="seedStatus" style="margin-bottom:15px;">
+    <p>
+      Day:
+      <strong id="currentDay">0</strong> /
+      <strong id="totalDays">0</strong>
+    </p>
+    <p>
+      Next watering:
+      <strong id="nextWater">0</strong> ml
+    </p>
   </div>
 
-  <!-- PAGE 2 -->
-  <div id="pageMulti" class="hidden">
-    <h2>Multi-Day Schedule</h2>
-
-    <input type="number" id="amount1" placeholder="Amount 1 (mL)" min="1"><br>
-    <input type="number" id="amount2" placeholder="Amount 2 (mL)" min="1"><br>
-    <input type="number" id="days" placeholder="Number of days" min="1"><br>
-
-    <button class="button" onclick="sendMulti()">Confirm</button>
-    <button class="button" onclick="cancel()">Cancel</button>
-  </div>
+</div>
 
 <script>
 let showingSingle = true;
-
-function togglePage() {
-  showingSingle = !showingSingle;
-  document.getElementById("pageSingle").classList.toggle("hidden");
-  document.getElementById("pageMulti").classList.toggle("hidden");
-}
 
 function sendAmount() {
   var amount = document.getElementById("amount").value;
@@ -94,6 +110,7 @@ function sendAmount() {
   }
   var xhr = new XMLHttpRequest();
   xhr.open("GET", "/water?amount=" + amount, true);
+  xhr.onload = updateStatus;
   xhr.send();
 }
 
@@ -112,18 +129,89 @@ function sendMulti() {
     "/water_multi?amount1=" + a1 + "&amount2=" + a2 + "&days=" + d,
     true
   );
+  xhr.onload = updateStatus;
+  updateSeedStatus();
   xhr.send();
 }
 
 function cancel() {
   var xhr = new XMLHttpRequest();
   xhr.open("GET", "/cancel", true);
+  xhr.onload = updateStatus;
+  updateSeedStatus();
   xhr.send();
 }
+
+
+function updateStatus() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/status", true);
+  xhr.onload = function () {
+    if (xhr.status === 200) {
+      var data = JSON.parse(xhr.responseText);
+      var el = document.getElementById("timerStatus");
+      el.textContent = data.running ? "RUNNING" : "STOPPED";
+      el.style.color = data.running ? "green" : "red";
+    }
+  };
+  xhr.send();
+}
+
+function updateSeedStatus() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/seed_status", true);
+  xhr.onload = function () {
+    if (xhr.status === 200) {
+      var data = JSON.parse(xhr.responseText);
+
+      if (!data.active) return;
+
+      document.getElementById("currentDay").textContent = data.currentDay;
+      document.getElementById("totalDays").textContent = data.days;
+      document.getElementById("nextWater").textContent = data.nextWater;
+    }
+  };
+  xhr.send();
+}
+
+window.onload = function () {
+  updateStatus();
+  updateSeedStatus();
+};
+
+function togglePage() {
+  showingSingle = !showingSingle;
+  document.getElementById("pageSingle").classList.toggle("hidden");
+  document.getElementById("pageMulti").classList.toggle("hidden");
+
+  if (!showingSingle) {
+    updateSeedStatus();
+  }
+}
+
 </script>
 </body>
 </html>
 )rawliteral";
+
+String templateProcessor(const String& var) {
+  if (var == "MIN_WATER") {
+    return waterAmount > 0 ? String(waterAmount, 0) : "0";
+  }
+  if (var == "MAX_WATER") {
+    return maxWaterAmount > 0 ? String(maxWaterAmount, 0) : "0";
+  }
+  if (var == "DAYS") {
+    return days > 0 ? String(days, 0) : "0";
+  }
+  if (var == "TIMER_STATUS") {
+    return timer24hActive ? "RUNNING" : "STOPPED";
+  }
+  if (var == "TIMER_COLOR") {
+    return timer24hActive ? "green" : "red";
+  }
+  return "";
+}
 
 void goToDeepSleep() {
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
@@ -139,6 +227,7 @@ void goToDeepSleep() {
   esp_deep_sleep_enable_gpio_wakeup(mask, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
   // enter deep sleep
+  digitalWrite(pumpPin, LOW); // just in case
   Serial.println("Entering deep sleep...");
   delay(100);
   esp_deep_sleep_start();
@@ -156,19 +245,10 @@ void runWaterFunction(int amountML) {
   // calculate amount of time to run the pump 
   unsigned long runTime = amountML/22.0  * 1000;
 
-  // set pump duration
-  pumpStopTime = millis() + runTime;
+  // set pump duration + extra time for water to flow through pipe
+  pumpStopTime = millis() + runTime + 500;
   pumpRunning = true;
   digitalWrite(pumpPin, HIGH);
-
-  // pump until timer ends
-  // while (pumpRunning){
-  //   if (pumpRunning && millis() >= pumpStopTime){
-  //     digitalWrite(pumpPin, LOW);
-  //     pumpRunning = false;
-  //     Serial.println("Pump stopped");
-  //   }
-  // }
 
   // 80,000 * (t * 60 * 60) = 500 mililitrers a hour
   // 22ml a second
@@ -190,7 +270,7 @@ void enableWebserver(){
   
   // Send web page to client
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(200, "text/html", index_html);
+    request->send_P(200, "text/html", index_html, templateProcessor);
   });
 
   server.on("/water", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -223,14 +303,6 @@ void enableWebserver(){
       maxWaterAmount = request->getParam("amount2")->value().toInt();
       days = request->getParam("days")->value().toInt();
       currentDay = 0;
-
-      // exponential calculation
-      // R = (B/A)^(1/T) - 1
-
-      // B = future value (max water)
-      // A = original value (min water)
-      // R = growth rate ()
-      // T = time period (days)
       
       // begin water timer
       timer24hActive = true;
@@ -256,6 +328,24 @@ void enableWebserver(){
     digitalWrite(pumpPin, LOW);
 
     request->send(200, "text/plain", "Cancelled");
+  });
+
+  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String json = "{ \"running\": ";
+    json += timer24hActive ? "true" : "false";
+    json += " }";
+    request->send(200, "application/json", json);
+  });
+
+  server.on("/seed_status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String json = "{";
+    json += "\"active\":"; json += seedSettingActive ? "true" : "false";
+    json += ",\"currentDay\":"; json += String(currentDay, 0);
+    json += ",\"days\":"; json += String(days, 0);
+    json += ",\"nextWater\":"; json += String(waterAmount, 0);
+    json += "}";
+
+    request->send(200, "application/json", json);
   });
   
   server.onNotFound(notFound);
@@ -317,17 +407,26 @@ void setup() {
     // goToDeepSleep();
   }
   else {
-    Serial.println("Power-on or reset. Waiting 3 sec before sleep...");
-    delay(3000); // <-- Give time to open Serial Monitor
-    goToDeepSleep();
+
+    // if the switch is on while batteries are plugged in then keep website on
+    if (digitalRead(BUTTON_PIN) == LOW) {
+      Serial.println("Power-on or reset. Waiting 3 sec before sleep...");
+      delay(3000); // <-- Give time to open Serial Monitor
+      goToDeepSleep();
+    }
+    else if (digitalRead(BUTTON_PIN) == HIGH){
+      enableWebserver();
+      Serial.println("Webserver running");
+    }
+
+    
   }
 
   Serial.println("Device awake. Press button to sleep again.");
 }
 
 void loop() {
-  // Serial.println("Device awake. Press button to sleep again.");
-
+  // stop pumping water once timer is up
   if (pumpRunning && millis() >= pumpStopTime){
     digitalWrite(pumpPin, LOW);
     pumpRunning = false;
@@ -338,9 +437,9 @@ void loop() {
     }
   }
   
+  // go to sleep once button pressed
   if (digitalRead(BUTTON_PIN) == LOW && pumpRunning == false) {
     goToDeepSleep();
   }
 
-  // delay(500);
 }
