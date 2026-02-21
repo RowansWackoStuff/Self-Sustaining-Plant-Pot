@@ -74,6 +74,7 @@ With this, the height of the reservoir will be rounded to 10 cm.
 I wanted the pot to be modular in order to print in the printer's base of 256x256mm. In order to do this, I split the pipe, ring, reservoir, pot, and electrical components into seperate moduals.
 
 ## TEST POT
+I printed and tested each part individually and avoided printing the top pot in order to save filiment and instead just printed the base screw and ring mount seperatly.
 <div>
 <img src="pictures/testpot.jpg" width="50%"/><img src="pictures/testdog.jpg" width="50%"/>
 </div>
@@ -128,9 +129,11 @@ Bonus goals:
 
 
 # mistakes/problems on the way
-- SolidWorks saving files in order incorrectly (couldn't reprint pot)
-- the external pipe leaks
-- battery box clips separated (need to learn better techniques)
+- SolidWorks having no export only save as led me to save over my own files multiple times instead of exporting stls
+- printed the final prototype base just for it to come out missing the pipe connection in order to not waste filiment printing again I drilled a hole
+in the same place, this caused me to have to remake the extension pipe as well as caused the pump to be superglued in place due to it being loose in the hole (wont be making that mistake again)
+- the external pipe leaks due to poor sealing
+- Tolerance for filiments changed when swapping to the final prototype so testing the connections was a waste of time
 
 # Improvements for Next Time:
 - reduce locking seal length (friction is very strong).
@@ -138,6 +141,8 @@ Bonus goals:
 - improve seals for water pipes.
 - Incorporate pipe into waterpot for better aesthetic.
 - Create a custom PCB to reduce soldering errors.
+- Battery box clips separated (need to learn better techniques)
+- Sort SolidWorks files neatly in order to reduce complications
   
 I'll update this page with the lettuce growth once complete (if ever).
 
