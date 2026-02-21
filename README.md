@@ -58,37 +58,48 @@ In order to interact with the system I used the ESPAsyncWebServer library which 
 
 This user interface consists of a water setting for default watering a plant daily with the same amount aswell as a seed setting the takes a minimum and maximum amount of water as well as the amount of days to water in order grow seeds. The seeds are watered exponentially over the days as in the early stage of development the seeds need a small amount of water and in the mature stages require a drastically larger amount of water.
 
-## webserver
-## deepsleep
+<div align="center">
+<img src="pictures/WateringPage.PNG" width="30%"/><img src="pictures/Seedsetting.PNG" width="30%"/>
+</div>
 
-
-
-
+Deepsleep is an ultralow power state for microcontrollers that maximise the amount of battery life when waiting. For the pot the deepsleep is set once the watering settings are set and the switch for pin 5 is off. This turns off the wifi and other components and sets a 24hr timer for the system to wake up, water, sleep and repeat. With this programming running in the start up script of the esp the system can save power and extend the projects life time.
 
 ## Testing pot
-
-## math for pot
 A small lettuce needs roughly less than 1 cup of water a day for growth. With this in mind the height of the reserviour can be calculated.
 
 1 cup = 250ml
 7 cups = 1750ml ~ 2L ~ 2000ml
 2L = 2000cm^3
-
 cylinder volume = pi*r^2*h
-
 2000cm = pi * 7.5^2 * h
 11.32cm = h
 
-with this the height of the reserviour will be rounded 10cm 
+With this the height of the reserviour will be rounded 10cm.
 
-## clip design
+I wanted the pot to be modular in order to print in the printers base of 256x256mm. In order to do this I split the pipe, ring, reserviour, pot and electrical components into seperate moduals.
 
+## RING + PIPE
+// insert ring
+// insert pipe
+
+## POT
+// insert pot design
+
+## RESERVUOUR
+// INSERT RESERVIOUR
 // INSERT ROTATION LINK MODEL HERE
+
+## BATTERY BOX
+// insert battery box
+// insert circuit box
 
 
 <div>
 <img src="pictures/testpot.jpg" width="50%"/><img src="pictures/testdog.jpg" width="50%"/>
 </div>
+
+## battery cage
+// INSERT ROTATION LINK MODEL HERE
 
 ## FINISHED
 
@@ -122,6 +133,7 @@ bonus goals:
 - improve seals for water pipes
 - incorporate pipe into waterpot for better astetic
 - create a custom pcb to reduce soldering errors
-- 
+  
+I'll update this page with the lettuce growth once complete (if ever)
 
 THANKS FOR READING!
