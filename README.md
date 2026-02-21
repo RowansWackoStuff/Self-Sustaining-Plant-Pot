@@ -67,39 +67,44 @@ Deepsleep is an ultralow power state for microcontrollers that maximise the amou
 ## Testing pot
 A small lettuce needs roughly less than 1 cup of water a day for growth. With this in mind the height of the reserviour can be calculated.
 
-1 cup = 250ml
-7 cups = 1750ml ~ 2L ~ 2000ml
-2L = 2000cm^3
-cylinder volume = pi*r^2*h
-2000cm = pi * 7.5^2 * h
-11.32cm = h
+1 cup = 250ml, 7 cups = 1750ml, 1750ml = 1750cm^3, cylinder volume = pi*r^2*h, 1750cm = pi * 7.5^2 * h, h = 9.9cm
 
-With this the height of the reserviour will be rounded 10cm.
+With this, the height of the reserviour will be rounded to 10cm.
 
 I wanted the pot to be modular in order to print in the printers base of 256x256mm. In order to do this I split the pipe, ring, reserviour, pot and electrical components into seperate moduals.
 
-## RING + PIPE
-// insert ring
-// insert pipe
-
-## POT
-// insert pot design
-
-## RESERVUOUR
-// INSERT RESERVIOUR
-// INSERT ROTATION LINK MODEL HERE
-
-## BATTERY BOX
-// insert battery box
-// insert circuit box
-
-
+## TEST POT
 <div>
 <img src="pictures/testpot.jpg" width="50%"/><img src="pictures/testdog.jpg" width="50%"/>
 </div>
 
-## battery cage
-// INSERT ROTATION LINK MODEL HERE
+## FINAL MODELS
+
+## Ring + Pipe
+The ring connects into the top of the pot to keep it still with the pipe having connections to the reserviour and ring.
+<div align="center">
+<img src="pictures/RingModel.png" width="50%"/>
+<img src="pictures/PipeExtension.png" width="15%"/>
+</div>
+
+## Top Pot
+The top pot has a custom screw base as well as a circular cut in the top to allow for a stable ring connection.
+<div align="center">
+<img src="pictures/PotModel.png" width="50%"/>
+</div>
+
+## Reserviour
+The reserviour has the connection to the battery box to slide into as well as a hole for the pumps pipe to slot into.
+<div align="center">
+<img src="pictures/PotBaseModel.png" width="50%"/>
+</div>
+
+## Battery Box
+The battery box is built of several parts that slide into place with each oter before slotting into the reserviour. The battery box has sapce to hold 6 double A batteries with the circuit box attaching on top for all the exlectrical components to sit inside.
+<div align="center">
+<img src="pictures/BatteryCage.png" width="30%"/><img src="pictures/CircuitCage.png" width="50%"/>
+</div>
+
 
 ## FINISHED
 
